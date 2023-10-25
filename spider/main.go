@@ -53,90 +53,14 @@ func chapters() {
 		item := map[string]string{}
 
 		ele.ForEach("tr", func(i int, p *colly.HTMLElement) {
-			// 名称
-			if p.Attr("class") == "infobox-title" {
-				nameCN := p.ChildText(`big`)
-				nameEN := p.ChildText(`small`)
-				item["name_cn"] = nameCN
-				item["name_en"] = nameEN
-				log.Info("[%s:%s]", nameCN, nameEN)
-			}
+			// 物品名称
+			itemName(p, item, log)
 
 			// 物品图片+图片名称
-			imageName := p.ChildAttr(`div[class="inv_item inv_item_old"] a[class="image"] img`, "alt")
-			imageURL := p.ChildAttr(`div[class="inv_item inv_item_old"] a[class="image"] img`, "src")
-			// 一般第二个为物品图片，特殊格式没有div[class="inv_item inv_item_old"]
-			if len(imageName) < 1 && i == 1 {
-				imageName = p.ChildAttr(`a[class="image"] img`, "alt")
-				imageURL = p.ChildAttr(`a[class="image"] img`, "src")
-			}
-			if len(imageName) > 0 {
-				log.Info("[image_name:%s] [image_url:%s]", imageName, imageURL)
-				if err := imageView.Save(imageName, imageURL); err != nil {
-					log.Warn("[save image fail] [err:%s] [name:%s] [href:%s]", err, imageName, imageURL)
-					return
-				}
-				item["image_name"] = imageName
-			}
+			itemImage(p, i, log, imageView, item)
 
 			// 合成材料
-			if strings.TrimSpace(p.ChildText(`th[class="infobox-label"]`)) == "材料" {
-				// 材料数量 按，或、分割
-				countStr := p.ChildText(`td[class="infobox-data"]`)
-				// 最后一个为合成必要条件时,获取的字符串是()
-				hasMast := false
-				if strings.Contains(countStr, "（") {
-					hasMast = true
-				}
-				countStrArr := utils.SplitNumStr(countStr, "[，, 、\\s x × （ ）]+")
-				var hechengs []*dao.HeCheng
-				p.ForEach(`a`, func(i int, h *colly.HTMLElement) {
-					nameCN := h.Attr(`title`)
-					nameEN := h.ChildAttr(`img`, "alt")
-					href := h.ChildAttr(`img`, "src")
-					count := "1"
-					if len(countStrArr) > i {
-						count = countStrArr[i]
-					} else {
-						log.Warn("[hecheng] [no count] [count_str:%s] [count_len:%d] [name_cn:%s] [name_en:%s]", countStr, len(countStrArr), nameCN, nameEN)
-					}
-					// image alt可能为中文，此时取a标签中href
-					// <a href="/wiki/%E6%96%87%E4%BB%B6:Papyrus.png" class="image" title="莎草纸">
-					if utils.ContainsChineseCharacters(nameEN) {
-						hrefA := h.Attr(`href`)
-						if index := strings.Index(hrefA, ":"); index > -1 {
-							nameEN = hrefA[index+1:]
-						}
-					}
-					// a 标签中href也有可能为中文，此时取href中名称
-					// src="https://huiji-thumb.huijistatic.com/dontstarve/uploads/thumb/e/e9/Saffron_Feather.png/32px-Saffron_Feather.png"
-					if utils.ContainsChineseCharacters(nameEN) {
-						nameEN = filepath.Base(href)
-						strs := strings.Split(nameEN, "-")
-						if len(strs) > 1 {
-							nameEN = strs[1]
-						}
-					}
-					log.Info("[hecheng] [name_en:%s] [name_cn:%s] [href:%s] [count:%s]", nameEN, nameCN, href, count)
-					if href != "" {
-						if err := imageView.Save(nameEN, href); err != nil {
-							log.Warn("[save image fail] [err:%s] [name_cn:%s] [name_en:%s] [href:%s]", err, nameCN, nameEN, href)
-							return
-						}
-					}
-					hecheng := &dao.HeCheng{NameEN: nameEN, NameCN: nameCN, Count: count}
-					hechengs = append(hechengs, hecheng)
-				})
-				if hasMast {
-					hechengs[len(hechengs)-1].Mast = true
-				}
-				data, err := json.Marshal(hechengs)
-				if err != nil {
-					log.Warn("[marshal hecheng fail] [err:%s] [hecheng:%+v]", err, hechengs)
-					return
-				}
-				item["hecheng"] = string(data)
-			}
+			hecheng(p, log, imageView, item)
 		})
 
 		// return
@@ -174,4 +98,99 @@ func chapters() {
 
 	contentCollector.Visit("https://dontstarve.huijiwiki.com/index.php?title=%E5%88%86%E7%B1%BB:%E7%89%A9%E5%93%81&pageuntil=jiang#mw-pages")
 	contentCollector.Wait()
+}
+
+func hecheng(p *colly.HTMLElement, log *golog.Logger, imageView *dao.ImageView, item map[string]string) {
+	// 合成材料
+	if strings.TrimSpace(p.ChildText(`th[class="infobox-label"]`)) == "材料" {
+		// 材料数量 按，或、分割
+		countStr := p.ChildText(`td[class="infobox-data"]`)
+		// 最后一个为合成必要条件时,获取的字符串是()
+		hasMast := false
+		if strings.Contains(countStr, "（") {
+			hasMast = true
+		}
+		countStrArr := utils.SplitNumStr(countStr, "[，, 、\\s x × （ ）]+")
+		var hechengs []*dao.HeCheng
+		p.ForEach(`a`, func(i int, h *colly.HTMLElement) {
+			nameCN := h.Attr(`title`)
+			nameEN := h.ChildAttr(`img`, "alt")
+			href := h.ChildAttr(`img`, "src")
+			count := "1"
+			if len(countStrArr) > i {
+				count = countStrArr[i]
+			} else {
+				log.Debug("[hecheng] [no count] [count_str:%s] [count_len:%d] [name_cn:%s] [name_en:%s]", countStr, len(countStrArr), nameCN, nameEN)
+			}
+			// image alt可能为中文，此时取a标签中href
+			// <a href="/wiki/%E6%96%87%E4%BB%B6:Papyrus.png" class="image" title="莎草纸">
+			if utils.ContainsChineseCharacters(nameEN) {
+				hrefA := h.Attr(`href`)
+				if index := strings.Index(hrefA, ":"); index > -1 {
+					nameEN = hrefA[index+1:]
+				}
+			}
+			// a 标签中href也有可能为中文，此时取href中名称
+			// src="https://huiji-thumb.huijistatic.com/dontstarve/uploads/thumb/e/e9/Saffron_Feather.png/32px-Saffron_Feather.png"
+			if utils.ContainsChineseCharacters(nameEN) {
+				nameEN = filepath.Base(href)
+				strs := strings.Split(nameEN, "-")
+				if len(strs) > 1 {
+					nameEN = strs[1]
+				}
+			}
+			log.Info("[hecheng] [name_en:%s] [name_cn:%s] [href:%s] [count:%s]", nameEN, nameCN, href, count)
+			if href != "" {
+				if err := imageView.Save(nameEN, href); err != nil {
+					log.Warn("[save image fail] [err:%s] [name_cn:%s] [name_en:%s] [href:%s]", err, nameCN, nameEN, href)
+					// return
+				}
+			}
+			hecheng := &dao.HeCheng{NameEN: nameEN, NameCN: nameCN, Count: count}
+			hechengs = append(hechengs, hecheng)
+		})
+		if hasMast {
+			hechengs[len(hechengs)-1].Mast = true
+		}
+		data, err := json.Marshal(hechengs)
+		if err != nil {
+			log.Warn("[marshal hecheng fail] [err:%s] [hecheng:%+v]", err, hechengs)
+			return
+		}
+		if len(hechengs) != len(countStrArr) {
+			log.Warn("[hecheng count image not equles] [count_str:%s] [count_len:%d] [image_len:%d] [image_str:%s]", countStr, len(countStrArr), len(hechengs), string(data))
+		}
+		item["hecheng"] = string(data)
+	}
+}
+
+// 物品图片+图片名称
+func itemImage(p *colly.HTMLElement, i int, log *golog.Logger, imageView *dao.ImageView, item map[string]string) {
+	imageName := p.ChildAttr(`div[class="inv_item inv_item_old"] a[class="image"] img`, "alt")
+	imageURL := p.ChildAttr(`div[class="inv_item inv_item_old"] a[class="image"] img`, "src")
+
+	// 一般第二个为物品图片，特殊格式没有div[class="inv_item inv_item_old"]
+	if len(imageName) < 1 && i == 1 {
+		imageName = p.ChildAttr(`a[class="image"] img`, "alt")
+		imageURL = p.ChildAttr(`a[class="image"] img`, "src")
+	}
+	if len(imageName) > 0 {
+		log.Info("[image_name:%s] [image_url:%s]", imageName, imageURL)
+		if err := imageView.Save(imageName, imageURL); err != nil {
+			log.Warn("[save image fail] [err:%s] [name:%s] [href:%s]", err, imageName, imageURL)
+
+		}
+		item["image_name"] = imageName
+	}
+}
+
+// 物品名称
+func itemName(p *colly.HTMLElement, item map[string]string, log *golog.Logger) {
+	if p.Attr("class") == "infobox-title" {
+		nameCN := p.ChildText(`big`)
+		nameEN := p.ChildText(`small`)
+		item["name_cn"] = nameCN
+		item["name_en"] = nameEN
+		log.Info("[%s:%s]", nameCN, nameEN)
+	}
 }
