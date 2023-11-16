@@ -25,12 +25,46 @@ type ItemView struct {
 	L *golog.Logger
 }
 
+// 基础
+type BasePair struct {
+	NameCN      string
+	ImageNameEN string
+}
+
+// 物品合成表
+type ItemFormula struct {
+	BasePair
+	Count string // 数量
+	Mast  bool   // 是必要条件，不是合成材料
+}
+
 // 合成表
 type HeCheng struct {
 	NameEN string
 	NameCN string
 	Count  string // 数量
-	Mast   bool // 是必要条件，不是合成材料
+	Mast   bool   // 是必要条件，不是合成材料
+}
+
+// 制作栏
+type ZhiZuoLan struct {
+	GameNameCN      string
+	GameImgNameEN   string
+	ZhiZuoNameCN    string
+	ZhiZuoImgNameEN string
+}
+
+// 解锁
+type JieSuo struct {
+	JieSuoNameCN    string
+	JieSuoImgNameEN string
+}
+
+// 食物属性
+type FoodAttr struct {
+	NameCN      string
+	ImageNameEN string
+	Value       string
 }
 
 func InitItemView() error {
@@ -70,6 +104,54 @@ func InitItemView() error {
 	return nil
 }
 
+func ItemArr() []map[string]string {
+	return itemArray
+}
+
+func (iv *ItemView) Select(field, value string) map[string]string {
+	_, res := iv.doSelect(field, value)
+	return res
+}
+
+func (iv *ItemView) doSelect(field, value string) (index int, res map[string]string) {
+	if _, ok := headerMap[field]; !ok {
+		return -1, nil
+	}
+	for i, item := range itemArray {
+		if item[field] == value {
+			return i, item
+		}
+	}
+	return -1, nil
+}
+
+func (iv *ItemView) Update(it map[string]string, conditionKey, conditionValue string) error {
+	index, res := iv.doSelect(conditionKey, conditionValue)
+	if index > -1 {
+		iv.doDelete(index, it)
+		for k, v := range it {
+			res[k] = v
+		}
+	} else {
+		res = it
+	}
+	return iv.Insert(res)
+}
+
+func (iv *ItemView) doDelete(i int, it map[string]string) {
+	indexNameEN, ok := it[uniqIndexNameENStr]
+	if ok {
+		delete(uniqIndexNameEN, indexNameEN)
+	}
+	if i < 0 || i > len(itemArray)-1 {
+		return
+	}
+	itemArray[i] = itemArray[len(itemArray)-1]
+	itemArray = itemArray[:len(itemArray)-1]
+	itemArrayToSave[i] = itemArrayToSave[len(itemArrayToSave)-1]
+	itemArrayToSave = itemArrayToSave[:len(itemArrayToSave)-1]
+}
+
 func (iv *ItemView) Insert(it map[string]string) error {
 	// 数据已存在
 	indexNameEN, ok := it[uniqIndexNameENStr]
@@ -95,5 +177,6 @@ func (iv *ItemView) Insert(it map[string]string) error {
 }
 
 func (iv *ItemView) save() error {
+	// iv.L.Info("[save item] [len:%d] [1:%+v] [2:%+v]", len(itemArrayToSave), itemArrayToSave[0], itemArray[0])
 	return utils.WriteExcelWithTitle(itemPath, header, itemArrayToSave, nil, false)
 }

@@ -140,3 +140,11 @@ func SplitNumStr(str, reg string) []string {
 	}
 	return res
 }
+
+func MapToSlice[T comparable, U any](m map[T]U) []T {
+	var result []T
+	for key := range m {
+		result = append(result, key)
+	}
+	return result
+}
