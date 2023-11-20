@@ -126,17 +126,17 @@ func main() {
 	Init()
 
 	// 基础物品
-	itemListURL := []string{
-		`https://dontstarve.huijiwiki.com/index.php?title=%E5%88%86%E7%B1%BB:%E7%89%A9%E5%93%81&pageuntil=jiang#mw-pages`,
-		`https://dontstarve.huijiwiki.com/index.php?title=%E5%88%86%E7%B1%BB:%E7%89%A9%E5%93%81&pagefrom=jiang#mw-pages`,
-		`https://dontstarve.huijiwiki.com/index.php?title=%E5%88%86%E7%B1%BB:%E7%89%A9%E5%93%81&pagefrom=xi+gua+bing+gun#mw-pages`,
-	}
-	for _, u := range itemListURL {
-		Items(u)
-	}
+	// itemListURL := []string{
+	// 	`https://dontstarve.huijiwiki.com/index.php?title=%E5%88%86%E7%B1%BB:%E7%89%A9%E5%93%81&pageuntil=jiang#mw-pages`,
+	// 	`https://dontstarve.huijiwiki.com/index.php?title=%E5%88%86%E7%B1%BB:%E7%89%A9%E5%93%81&pagefrom=jiang#mw-pages`,
+	// 	`https://dontstarve.huijiwiki.com/index.php?title=%E5%88%86%E7%B1%BB:%E7%89%A9%E5%93%81&pagefrom=xi+gua+bing+gun#mw-pages`,
+	// }
+	// for _, u := range itemListURL {
+	// 	Items(u)
+	// }
 
 	// 补充食物表
-	// AppendFoodItem("https://dontstarve.huijiwiki.com/wiki/%E7%83%B9%E9%A5%AA")
+	AppendFoodItem("https://dontstarve.huijiwiki.com/wiki/%E7%83%B9%E9%A5%AA")
 }
 
 // 补充食物信息
@@ -160,7 +160,7 @@ func AppendFoodItem(url string) {
 		item := h.Response.Ctx.GetAny("item").(*map[string]string)
 		imageView := &dao.ImageView{L: log}
 		var zhizuoArr [][]dao.BasePair
-		zhizuo := (*item)["shiwu_zhizuo"]
+		zhizuo := (*item)["食物制作"]
 		json.Unmarshal([]byte(zhizuo), &zhizuoArr)
 		var zhizuoOne []dao.BasePair
 		h.ForEach(`div[class="inv_back inv_back_old"]`, func(i int, h *colly.HTMLElement) {
@@ -185,7 +185,7 @@ func AppendFoodItem(url string) {
 			log.Warn("[marshal fail] [err:%s] [it:%+v]", err, zhizuoArr)
 			return
 		}
-		(*item)["shiwu_zhizuo"] = string(data)
+		(*item)["食物制作"] = string(data)
 	})
 
 	// 列表
@@ -209,12 +209,13 @@ func AppendFoodItem(url string) {
 							// return
 						}
 					}
-					item = itemView.Select("name_cn", nameCN)
+					item = itemView.Select("中文名称", nameCN)
 					log.Info("[select] [name_cn:%s] [res:%+v]", nameCN, item)
 					if item == nil {
 						item = make(map[string]string)
-						item["name_cn"] = nameCN
-						item["image_name"] = imageNameEN
+						item["中文名称"] = nameCN
+						item["英文名称"] = strings.Replace(imageNameEN, ".png", "", -1)
+						item["图片名称"] = imageNameEN
 					}
 
 					// 跳转合成列表
@@ -248,22 +249,22 @@ func AppendFoodItem(url string) {
 						log.Warn("[marshal fail] [err:%s] [it:%+v]", err, it)
 						return
 					}
-					item[fmt.Sprintf("version%d", i-1)] = string(data)
+					item[fmt.Sprintf("版本%d", i-1)] = string(data)
 				}
 
 				// 烹饪时间
 				if i == 8 {
-					item["pengrenshijian"] = td.Text
+					item["烹饪时间"] = td.Text
 				}
 
 				// 优先级
 				if i == 9 {
-					item["youxianji"] = td.Text
+					item["烹饪优先级"] = td.Text
 				}
 
 				// 属性要求
 				if i == 10 {
-					item["shuxingyaoqiu"] = td.Text
+					item["属性要求"] = td.Text
 				}
 
 				// 指定
@@ -273,7 +274,7 @@ func AppendFoodItem(url string) {
 			if len(item) < 1 {
 				return
 			}
-			err := itemView.Update(item, "name_cn", item["name_cn"])
+			err := itemView.Update(item, "中文名称", item["中文名称"])
 			if err != nil {
 				log.Warn("[update fail] [name_cn:%s] [item:%+v]", item["name_cn"], item)
 			}
